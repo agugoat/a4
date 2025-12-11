@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>UN Regions Radial Chart</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f3ff;
+      color: #1f2933;
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      margin-bottom: 0.25rem;
+    }
+    #subtitle {
+      color: #6b7280;
+      margin-bottom: 1.5rem;
+    }
+    svg {
+      overflow: visible;
+    }
+    .axis-line {
+      stroke: #e5e7eb;
+      stroke-width: 1;
+    }
+    .axis-label {
+      fill: #4b5563;
+      font-size: 11px;
+      text-anchor: middle;
+    }
+    .grid-circle {
+      fill: none;
+      stroke: #e5e7eb;
+      stroke-width: 1;
+    }
+    .region-dot {
+      stroke: white;
+      stroke-width: 1;
+      cursor: pointer;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      font-size: 13px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+    }
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: white;
+      border-radius: 999px;
+      padding: 0.4rem 0.75rem;
+      box-shadow: 0 10px 25px rgba(15,23,42,0.15);
+      border: 1px solid #e5e7eb;
+      font-size: 12px;
+      color: #111827;
+      display: none;
+      white-space: nowrap;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <h1>How do the Regions compare across UN metrics?</h1>
+  <div id="subtitle">Radial view of regional averages across 10 indicators</div>
+
+  <div id="chart"></div>
+  <div class="legend" id="legend"></div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    // 1. CONFIG --------------------------------------------------------
+    const width = 800;
+    const height = 800;
+    const innerRadius = 80;
+    const outerRadius = 300;
+
+    const regions = [
+      "Americas",
+      "East Asia & Pacific",
+      "Europe & Central Asia",
+      "Middle East & North Africa",
+      "South Asia",
+      "Sub-Saharan Africa"
+    ];
+
+    // Metric definition: which column to use + pretty label
+    const metrics = [
+  { id: "gdp_per_capita",
+    label: "GDP per capita (PPP)",
+    col: "GDP per capita in $ (PPP)"
+  },
+
+  { id: "unemployment",
+    label: "Unemployment (%)",
+    col: "unemployment (%)"
+  },
+
+  { id: "infant_mortality",
+    label: "Infant mortality",
+    col: "infant mortality"
+  },
+
+  { id: "hdi",
+    label: "Human Development Index",
+    col: "human development index"        // <- your fix
+  },
+
+  { id: "edu_gdp",
+    label: "Education (% of GDP)",
+    col: "Education as % of GDP"
+  },
+
+  { id: "health_pp",
+    label: "Health exp. per person",
+    col: "health expenditure \nper person"
+  },
+
+  { id: "economic_growth",
+    label: "Economic growth",
+    col: "Economic Growth"
+  },
+
+  { id: "military_gdp",
+    label: "Military (% of GDP)",
+    col: "Military Spending as % of GDP"
+  },
+
+  { id: "co2_pc",
+    label: "CO\u2082 emissions per capita",
+    col: "CO2e emissions per capita"
+  },
+
+  { id: "corr",
+    label: "Control of corruption",
+    col: "control of corruption"
+  }
+];
+
+
+    // Colors for six regions (roughly matching your template vibe)
+    const regionColor = d3.scaleOrdinal()
+      .domain(regions)
+      .range([
+        "#6366f1", // Americas
+        "#ec4899", // EAP
+        "#22c55e", // ECA
+        "#f97316", // MENA
+        "#06b6d4", // South Asia
+        "#a855f7"  // SSA
+      ]);
+
+    // IMPORTANT: Country -> Region mapping
+    // Fill this out for all countries in your CSV.
+    // Keys must match the "indicator" column (country names).
+    const regionByCountry = {
+      // --- Americas ---
+      "United States": "Americas",
+      "Canada": "Americas",
+      "Mexico": "Americas",
+      "Argentina": "Americas",
+      "Brazil": "Americas",
+      "Chile": "Americas",
+      "Colombia": "Americas",
+      "Peru": "Americas",
+      "Bolivia": "Americas",
+      "Ecuador": "Americas",
+      "Uruguay": "Americas",
+      "Paraguay": "Americas",
+      "Venezuela": "Americas",
+      "Costa Rica": "Americas",
+      "Panama": "Americas",
+      "Guatemala": "Americas",
+      "Honduras": "Americas",
+      "El Salvador": "Americas",
+      "Nicaragua": "Americas",
+      "Dominican Republic": "Americas",
+      "Haiti": "Americas",
+      "Cuba": "Americas",
+      "Jamaica": "Americas",
+      "Trinidad and Tobago": "Americas",
+      "Bahamas": "Americas",
+      "Barbados": "Americas",
+      "Belize": "Americas",
+      "Guyana": "Americas",
+      "Suriname": "Americas",
+
+      // --- East Asia & Pacific ---
+      "China": "East Asia & Pacific",
+      "Mongolia": "East Asia & Pacific",
+      "Japan": "East Asia & Pacific",
+      "South Korea": "East Asia & Pacific",
+      "North Korea": "East Asia & Pacific",
+      "Hong Kong SAR, China": "East Asia & Pacific",
+      "Taiwan": "East Asia & Pacific",
+      "Vietnam": "East Asia & Pacific",
+      "Thailand": "East Asia & Pacific",
+      "Cambodia": "East Asia & Pacific",
+      "Laos": "East Asia & Pacific",
+      "Myanmar": "East Asia & Pacific",
+      "Malaysia": "East Asia & Pacific",
+      "Singapore": "East Asia & Pacific",
+      "Indonesia": "East Asia & Pacific",
+      "Philippines": "East Asia & Pacific",
+      "Brunei": "East Asia & Pacific",
+      "Timor-Leste": "East Asia & Pacific",
+      "Australia": "East Asia & Pacific",
+      "New Zealand": "East Asia & Pacific",
+      "Fiji": "East Asia & Pacific",
+      "Papua New Guinea": "East Asia & Pacific",
+      "Solomon Islands": "East Asia & Pacific",
+      "Vanuatu": "East Asia & Pacific",
+
+      // --- Europe & Central Asia ---
+      "Albania": "Europe & Central Asia",
+      "Andorra": "Europe & Central Asia",
+      "Armenia": "Europe & Central Asia",
+      "Austria": "Europe & Central Asia",
+      "Azerbaijan": "Europe & Central Asia",
+      "Belarus": "Europe & Central Asia",
+      "Belgium": "Europe & Central Asia",
+      "Bosnia and Herzegovina": "Europe & Central Asia",
+      "Bulgaria": "Europe & Central Asia",
+      "Croatia": "Europe & Central Asia",
+      "Cyprus": "Europe & Central Asia",
+      "Czech Republic": "Europe & Central Asia",
+      "Denmark": "Europe & Central Asia",
+      "Estonia": "Europe & Central Asia",
+      "Finland": "Europe & Central Asia",
+      "France": "Europe & Central Asia",
+      "Georgia": "Europe & Central Asia",
+      "Germany": "Europe & Central Asia",
+      "Greece": "Europe & Central Asia",
+      "Hungary": "Europe & Central Asia",
+      "Iceland": "Europe & Central Asia",
+      "Ireland": "Europe & Central Asia",
+      "Italy": "Europe & Central Asia",
+      "Kazakhstan": "Europe & Central Asia",
+      "Kosovo": "Europe & Central Asia",
+      "Kyrgyz Republic": "Europe & Central Asia",
+      "Latvia": "Europe & Central Asia",
+      "Lithuania": "Europe & Central Asia",
+      "Luxembourg": "Europe & Central Asia",
+      "Malta": "Europe & Central Asia",
+      "Moldova": "Europe & Central Asia",
+      "Montenegro": "Europe & Central Asia",
+      "Netherlands": "Europe & Central Asia",
+      "North Macedonia": "Europe & Central Asia",
+      "Norway": "Europe & Central Asia",
+      "Poland": "Europe & Central Asia",
+      "Portugal": "Europe & Central Asia",
+      "Romania": "Europe & Central Asia",
+      "Russia": "Europe & Central Asia",
+      "Serbia": "Europe & Central Asia",
+      "Slovak Republic": "Europe & Central Asia",
+      "Slovenia": "Europe & Central Asia",
+      "Spain": "Europe & Central Asia",
+      "Sweden": "Europe & Central Asia",
+      "Switzerland": "Europe & Central Asia",
+      "Turkey": "Europe & Central Asia",
+      "Turkiye": "Europe & Central Asia",
+      "Ukraine": "Europe & Central Asia",
+      "United Kingdom": "Europe & Central Asia",
+      "Uzbekistan": "Europe & Central Asia",
+      "Turkmenistan": "Europe & Central Asia",
+      "Tajikistan": "Europe & Central Asia",
+
+      // --- Middle East & North Africa ---
+      "Algeria": "Middle East & North Africa",
+      "Bahrain": "Middle East & North Africa",
+      "Egypt": "Middle East & North Africa",
+      "Iran": "Middle East & North Africa",
+      "Iraq": "Middle East & North Africa",
+      "Israel": "Middle East & North Africa",
+      "Jordan": "Middle East & North Africa",
+      "Kuwait": "Middle East & North Africa",
+      "Lebanon": "Middle East & North Africa",
+      "Libya": "Middle East & North Africa",
+      "Morocco": "Middle East & North Africa",
+      "Oman": "Middle East & North Africa",
+      "Qatar": "Middle East & North Africa",
+      "Saudi Arabia": "Middle East & North Africa",
+      "Syrian Arab Republic": "Middle East & North Africa",
+      "Tunisia": "Middle East & North Africa",
+      "United Arab Emirates": "Middle East & North Africa",
+      "Yemen": "Middle East & North Africa",
+      "West Bank and Gaza": "Middle East & North Africa",
+
+      // --- South Asia ---
+      "Afghanistan": "South Asia",
+      "Bangladesh": "South Asia",
+      "Bhutan": "South Asia",
+      "India": "South Asia",
+      "Nepal": "South Asia",
+      "Pakistan": "South Asia",
+      "Sri Lanka": "South Asia",
+      "Maldives": "South Asia",
+
+      // --- Sub-Saharan Africa ---
+      "Angola": "Sub-Saharan Africa",
+      "Benin": "Sub-Saharan Africa",
+      "Botswana": "Sub-Saharan Africa",
+      "Burkina Faso": "Sub-Saharan Africa",
+      "Burundi": "Sub-Saharan Africa",
+      "Cabo Verde": "Sub-Saharan Africa",
+      "Cameroon": "Sub-Saharan Africa",
+      "Central African Republic": "Sub-Saharan Africa",
+      "Chad": "Sub-Saharan Africa",
+      "Comoros": "Sub-Saharan Africa",
+      "Congo (Dem. Rep.)": "Sub-Saharan Africa",
+      "Congo (Rep.)": "Sub-Saharan Africa",
+      "Cote d'Ivoire": "Sub-Saharan Africa",
+      "Djibouti": "Sub-Saharan Africa",
+      "Equatorial Guinea": "Sub-Saharan Africa",
+      "Eritrea": "Sub-Saharan Africa",
+      "Eswatini": "Sub-Saharan Africa",
+      "Ethiopia": "Sub-Saharan Africa",
+      "Gabon": "Sub-Saharan Africa",
+      "Gambia, The": "Sub-Saharan Africa",
+      "Ghana": "Sub-Saharan Africa",
+      "Guinea": "Sub-Saharan Africa",
+      "Guinea-Bissau": "Sub-Saharan Africa",
+      "Kenya": "Sub-Saharan Africa",
+      "Lesotho": "Sub-Saharan Africa",
+      "Liberia": "Sub-Saharan Africa",
+      "Madagascar": "Sub-Saharan Africa",
+      "Malawi": "Sub-Saharan Africa",
+      "Mali": "Sub-Saharan Africa",
+      "Mauritania": "Sub-Saharan Africa",
+      "Mauritius": "Sub-Saharan Africa",
+      "Mozambique": "Sub-Saharan Africa",
+      "Namibia": "Sub-Saharan Africa",
+      "Niger": "Sub-Saharan Africa",
+      "Nigeria": "Sub-Saharan Africa",
+      "Rwanda": "Sub-Saharan Africa",
+      "Senegal": "Sub-Saharan Africa",
+      "Sierra Leone": "Sub-Saharan Africa",
+      "Somalia": "Sub-Saharan Africa",
+      "South Africa": "Sub-Saharan Africa",
+      "South Sudan": "Sub-Saharan Africa",
+      "Sudan": "Sub-Saharan Africa",
+      "Tanzania": "Sub-Saharan Africa",
+      "Togo": "Sub-Saharan Africa",
+      "Uganda": "Sub-Saharan Africa",
+      "Zambia": "Sub-Saharan Africa",
+      "Zimbabwe": "Sub-Saharan Africa"
+    };
+
+    // 2. HELPER: parse numeric with commas --------------------------------
+    function toNumber(value) {
+  if (value == null) return NaN;
+  const s = String(value).trim();
+
+  // treat placeholders / missing values as NaN
+  if (!s || s === "..." || s.toLowerCase() === "na" || s.toLowerCase() === "n/a") {
+    return NaN;
+  }
+
+  // remove commas and percent signs
+  const cleaned = s.replace(/,/g, "").replace(/%/g, "");
+
+  const num = +cleaned;
+  return isNaN(num) ? NaN : num;
+}
+
+
+    // 3. SETUP SVG ------------------------------------------------------
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height);
+
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${centerX},${centerY})`);
+
+  const angleStep = (2 * Math.PI) / metrics.length;
+
+
+    const tooltip = d3.select("#tooltip");
+
+    // 4. LOAD DATA ------------------------------------------------------
+    // Use the exact filename of your CSV here
+    d3.csv("assignment 3 & 4 dataset - assignment 3 and 4(1).csv").then(raw => {
+      // Filter out metadata rows
+      const data = raw.filter(d =>
+        d.indicator &&
+        !["source", "URL", "notes", "data year"].includes(d.indicator)
+      );
+
+      // Attach regions
+      const withRegion = data
+        .map(d => {
+          const region = regionByCountry[d.indicator];
+          return region ? { ...d, region } : null;
+        })
+        .filter(d => d !== null);
+
+      // Compute region-level averages for each metric
+      const regionMetricMeans = {};
+      regions.forEach(r => { regionMetricMeans[r] = {}; });
+
+      metrics.forEach(metric => {
+        regions.forEach(region => {
+          const vals = withRegion
+            .filter(d => d.region === region)
+            .map(d => toNumber(d[metric.col]))
+            .filter(v => !isNaN(v));
+
+          const mean = vals.length ? d3.mean(vals) : NaN;
+          regionMetricMeans[region][metric.id] = mean;
+        });
+      });
+
+      // Build per-metric radial scales (separate scale per spoke)
+      const radialScales = {};
+      metrics.forEach(metric => {
+        const allVals = regions
+          .map(r => regionMetricMeans[r][metric.id])
+          .filter(v => !isNaN(v));
+
+        const extent = d3.extent(allVals);
+        // If all values equal, avoid zero span
+        const min = extent[0];
+        const max = extent[1] === extent[0] ? extent[0] + 1 : extent[1];
+
+        radialScales[metric.id] = d3.scaleLinear()
+          .domain([min, max])
+          .range([innerRadius, outerRadius]);
+      });
+
+      // 5. DRAW GRID & AXES --------------------------------------------
+
+      // A few concentric reference circles just for structure
+      const gridLevels = 3;
+      for (let i = 1; i <= gridLevels; i++) {
+        const r = innerRadius + (i / gridLevels) * (outerRadius - innerRadius);
+        g.append("circle")
+          .attr("class", "grid-circle")
+          .attr("r", r);
+      }
+
+      // Axis lines + labels
+      const axisGroup = g.append("g");
+      metrics.forEach((metric, i) => {
+        const angle =  i * angleStep - Math.PI / 2;
+        const xInner = Math.cos(angle) * innerRadius;
+        const yInner = Math.sin(angle) * innerRadius;
+        const xOuter = Math.cos(angle) * (outerRadius + 12);
+        const yOuter = Math.sin(angle) * (outerRadius + 12);
+
+        axisGroup.append("line")
+          .attr("class", "axis-line")
+          .attr("x1", xInner)
+          .attr("y1", yInner)
+          .attr("x2", Math.cos(angle) * outerRadius)
+          .attr("y2", Math.sin(angle) * outerRadius);
+
+        axisGroup.append("text")
+          .attr("class", "axis-label")
+          .attr("x", xOuter)
+          .attr("y", yOuter)
+          .attr("dy", "0.35em")
+          .text(metric.label)
+          .attr("text-anchor",
+            Math.abs(angle) < 1e-3 ? "middle" :
+            angle > -Math.PI / 2 && angle < Math.PI / 2 ? "start" : "end"
+          );
+      });
+
+      // 6. DRAW REGION DOTS --------------------------------------------
+      const dotsGroup = g.append("g");
+
+      const dotsData = [];
+        metrics.forEach((metric, i) => {
+        const angle = i * angleStep - Math.PI / 2;
+        regions.forEach(region => {
+            const value = regionMetricMeans[region][metric.id];
+            if (isNaN(value)) return;
+            const r = radialScales[metric.id](value);
+            const x = Math.cos(angle) * r;
+            const y = Math.sin(angle) * r;
+
+          dotsData.push({
+            metric: metric,
+            metricId: metric.id,
+            metricLabel: metric.label,
+            region,
+            value,
+            x,
+            y
+          });
+        });
+      });
+
+      dotsGroup.selectAll("circle")
+        .data(dotsData)
+        .enter()
+        .append("circle")
+        .attr("class", "region-dot")
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y)
+        .attr("r", 4.5)
+        .attr("fill", d => regionColor(d.region))
+        .on("mousemove", function (event, d) {
+          tooltip
+            .style("display", "block")
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px")
+            .html(
+              `<strong>${d.region}</strong> · ${d.metricLabel}<br/>` +
+              d.value.toFixed(2)
+            );
+        })
+        .on("mouseout", () => {
+          tooltip.style("display", "none");
+        });
+
+      // 7. LEGEND -------------------------------------------------------
+      const legend = d3.select("#legend");
+      regions.forEach(region => {
+        const item = legend.append("div").attr("class", "legend-item");
+        item.append("div")
+          .attr("class", "legend-swatch")
+          .style("background", regionColor(region));
+        item.append("span").text(region);
+      });
+
+    }).catch(err => {
+      console.error(err);
+      alert("Error loading CSV – check the filename/path.");
+    });
+  </script>
+</body>
+</html>
