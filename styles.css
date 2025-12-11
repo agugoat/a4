@@ -1,0 +1,110 @@
+body {
+    font-family: system-ui, sans-serif;
+    background: #fafafa;
+    margin: 0;
+    padding: 0;
+  }
+  
+  #container {
+    max-width: 1100px;
+    margin: 20px auto;
+    padding: 20px;
+  }
+  
+  h2 {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  #region-select {
+    font-size: 1rem;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid #ccc;
+  }
+  
+  #viz-wrapper {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+  
+  #left-panel {
+    width: 180px;
+    font-size: 0.9rem;
+  }
+  
+  #chart {
+    flex: 1;
+  }
+  
+  /* SVG text + axis lines */
+  .metric-label {
+    font-size: 10px;
+    text-anchor: middle;
+    fill: #666;
+  }
+  
+  .axis-line {
+    stroke: #e0e0e0;
+    stroke-width: 1px;
+  }
+  
+  .metric-slice {
+    fill: transparent;
+  }
+  
+  .metric-slice.hovered {
+    fill: #e5e5e5;
+  }
+  
+  /* circles */
+  .region-circle {
+    fill: white;
+    stroke: #999;
+    stroke-width: 1px;
+  }
+  
+  .region-circle.selected-region {
+    stroke: #7b3fe4;
+    stroke-width: 2px;
+    r: 7;
+  }
+  
+  /* purple arc */
+  .better-arc {
+    fill: none;
+    stroke: #7b3fe4;
+    stroke-width: 10;
+    stroke-linecap: round;
+  }
+  
+  /* center label */
+  #center-text {
+    font-size: 26px;
+    font-weight: 600;
+    text-anchor: middle;
+    fill: #333;
+  }
+  #center-subtext {
+    font-size: 12px;
+    text-anchor: middle;
+    fill: #777;
+  }
+  
+  /* tooltip */
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: white;
+    border-radius: 6px;
+    padding: 8px 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 12px;
+    border: 1px solid #ddd;
+  }
+  
+  .hidden {
+    display: none;
+  }
+  
