@@ -354,6 +354,7 @@
   // Groups we will reuse on update
   const gridGroup   = g.append("g").attr("class", "grid");
   const axisGroup   = g.append("g").attr("class", "axes");
+  const linesGroup  = g.append("g").attr("class", "rank-lines");
   const dotsGroup   = g.append("g").attr("class", "dots");
   const arcGroup    = g.append("g").attr("class", "highlight-arc");
   const centerGroup = g.append("g").attr("class", "center-label");
@@ -452,8 +453,9 @@
         return 0; // keep original order among ties
       });
 
-      // clear previous axes, dots, arc, center label
+      // clear previous axes, lines, dots, arc, center label
       axisGroup.selectAll("*").remove();
+      linesGroup.selectAll("*").remove();
       dotsGroup.selectAll("*").remove();
       arcGroup.selectAll("*").remove();
       centerGroup.selectAll("*").remove();
@@ -487,10 +489,15 @@
           );
       });
 
-      // 3. Compute dots data (all regions, but only selected is highlighted)
+      // 3. Compute dots data and lines data (all regions, but only selected is highlighted)
       const dotsData = [];
+      const linesData = [];
+      
       orderedMetrics.forEach((metric, i) => {
         const angle = i * angleStep - Math.PI / 2;
+        
+        // Collect all region values for this metric
+        const metricRegionData = [];
         regions.forEach((region, regionIdx) => {
           const value = regionMetricMeans[region][metric.id];
           if (isNaN(value)) return;
@@ -499,7 +506,7 @@
           const x = Math.cos(angle) * r;
           const y = Math.sin(angle) * r;
 
-          dotsData.push({
+          const dotData = {
             metric,
             metricId: metric.id,
             metricLabel: metric.label,
@@ -509,11 +516,40 @@
             y,
             angle,
             regionIdx
-          });
+          };
+          
+          dotsData.push(dotData);
+          metricRegionData.push(dotData);
         });
+        
+        // Sort by value (least to greatest) and create line
+        metricRegionData.sort((a, b) => a.value - b.value);
+        if (metricRegionData.length > 1) {
+          linesData.push({
+            metricId: metric.id,
+            points: metricRegionData
+          });
+        }
       });
 
-      // 4. Draw dots: selected region big & purple, others gray and smaller
+      // 4. Draw lines connecting regions from least to greatest for each metric
+      linesGroup.selectAll("path")
+        .data(linesData, d => d.metricId)
+        .enter()
+        .append("path")
+        .attr("class", "rank-line")
+        .attr("d", d => {
+          const lineGenerator = d3.line()
+            .x(p => p.x)
+            .y(p => p.y);
+          return lineGenerator(d.points);
+        })
+        .attr("fill", "none")
+        .attr("stroke", "#9ca3af")
+        .attr("stroke-width", 1.5)
+        .attr("opacity", 0.4);
+
+      // 5. Draw dots: selected region big & purple, others gray and smaller
       dotsGroup.selectAll("circle")
         .data(dotsData, d => d.metricId + "-" + d.region)
         .enter()
@@ -538,7 +574,7 @@
           tooltip.style("display", "none");
         });
 
-      // 5. Purple arc over the selected region's "strong" metrics
+      // 6. Purple arc over the selected region's "strong" metrics
       const bestIndices = orderedMetrics
         .map((metric, i) => bestRegionsByMetric[metric.id]?.includes(selectedRegion) ? i : null)
         .filter(i => i !== null);
@@ -564,7 +600,7 @@
           .attr("opacity", 0.9);
       }
 
-      // 6. Center summary: % of metrics where this region is strongest
+      // 7. Center summary: % of metrics where this region is strongest
       let bestCount = 0;
       metrics.forEach(metric => {
         if (bestRegionsByMetric[metric.id]?.includes(selectedRegion)) {

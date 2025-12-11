@@ -79,6 +79,14 @@ body {
     stroke-linecap: round;
   }
   
+  /* rank lines */
+  .rank-line {
+    fill: none;
+    stroke: #9ca3af;
+    stroke-width: 1.5;
+    opacity: 0.4;
+  }
+  
   /* center label */
   #center-text {
     font-size: 26px;
