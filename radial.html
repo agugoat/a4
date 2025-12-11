@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>UN Regions Radial Chart</title>
+  
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <style>
     body {
@@ -40,7 +41,7 @@
       stroke-width: 1;
     }
     .region-dot {
-      stroke: white;
+      stroke: rgb(120, 108, 108);
       stroke-width: 1;
       cursor: pointer;
     }
@@ -86,93 +87,49 @@
   <div class="legend" id="legend"></div>
 
   <div class="tooltip" id="tooltip"></div>
+  <div style="margin-bottom: 1rem;">
+  <label for="region-select" style="font-size: 14px; color:#4b5563;">
+    Select region:
+  </label>
+  <select id="region-select" style="margin-left:0.5rem; padding:0.25rem 0.5rem; border-radius:999px;">
+  </select>
+</div>
 
   <script>
-    // 1. CONFIG --------------------------------------------------------
-    const width = 800;
-    const height = 800;
-    const innerRadius = 80;
-    const outerRadius = 300;
+  // 1. CONFIG --------------------------------------------------------
+  const width = 800;
+  const height = 800;
+  const innerRadius = 80;
+  const outerRadius = 300;
 
-    const regions = [
-      "Americas",
-      "East Asia & Pacific",
-      "Europe & Central Asia",
-      "Middle East & North Africa",
-      "South Asia",
-      "Sub-Saharan Africa"
-    ];
+  const regions = [
+    "Americas",
+    "East Asia & Pacific",
+    "Europe & Central Asia",
+    "Middle East & North Africa",
+    "South Asia",
+    "Sub-Saharan Africa"
+  ];
 
-    // Metric definition: which column to use + pretty label
-    const metrics = [
-  { id: "gdp_per_capita",
-    label: "GDP per capita (PPP)",
-    col: "GDP per capita in $ (PPP)"
-  },
+  // Metric definition
+  const metrics = [
+    { id: "gdp_per_capita",  label: "GDP per capita (PPP)",   col: "GDP per capita in $ (PPP)" },
+    { id: "unemployment",    label: "Unemployment (%)",       col: "unemployment (%)" },
+    { id: "infant_mortality",label: "Infant mortality",       col: "infant mortality" },
+    { id: "hdi",             label: "Human Development Index",col: "human development index" },
+    { id: "edu_gdp",         label: "Education (% of GDP)",   col: "Education as % of GDP" },
+    { id: "health_pp",       label: "Health exp. per person", col: "health expenditure \nper person" },
+    { id: "economic_growth", label: "Economic growth",        col: "Economic Growth" },
+    { id: "military_gdp",    label: "Military (% of GDP)",    col: "Military Spending as % of GDP" },
+    { id: "co2_pc",          label: "CO\u2082 emissions per capita", col: "CO2e emissions per capita" },
+    { id: "corr",            label: "Control of corruption",  col: "control of corruption" }
+  ];
 
-  { id: "unemployment",
-    label: "Unemployment (%)",
-    col: "unemployment (%)"
-  },
+  // Purple highlight color
+  const highlightColor = "#7c3aed";
 
-  { id: "infant_mortality",
-    label: "Infant mortality",
-    col: "infant mortality"
-  },
-
-  { id: "hdi",
-    label: "Human Development Index",
-    col: "human development index"        // <- your fix
-  },
-
-  { id: "edu_gdp",
-    label: "Education (% of GDP)",
-    col: "Education as % of GDP"
-  },
-
-  { id: "health_pp",
-    label: "Health exp. per person",
-    col: "health expenditure \nper person"
-  },
-
-  { id: "economic_growth",
-    label: "Economic growth",
-    col: "Economic Growth"
-  },
-
-  { id: "military_gdp",
-    label: "Military (% of GDP)",
-    col: "Military Spending as % of GDP"
-  },
-
-  { id: "co2_pc",
-    label: "CO\u2082 emissions per capita",
-    col: "CO2e emissions per capita"
-  },
-
-  { id: "corr",
-    label: "Control of corruption",
-    col: "control of corruption"
-  }
-];
-
-
-    // Colors for six regions (roughly matching your template vibe)
-    const regionColor = d3.scaleOrdinal()
-      .domain(regions)
-      .range([
-        "#6366f1", // Americas
-        "#ec4899", // EAP
-        "#22c55e", // ECA
-        "#f97316", // MENA
-        "#06b6d4", // South Asia
-        "#a855f7"  // SSA
-      ]);
-
-    // IMPORTANT: Country -> Region mapping
-    // Fill this out for all countries in your CSV.
-    // Keys must match the "indicator" column (country names).
-    const regionByCountry = {
+  // Region mapping (same idea as before; keep/extend yours)
+     const regionByCountry = {
       // --- Americas ---
       "United States": "Americas",
       "Canada": "Americas",
@@ -365,106 +322,147 @@
       "Zimbabwe": "Sub-Saharan Africa"
     };
 
-    // 2. HELPER: parse numeric with commas --------------------------------
-    function toNumber(value) {
-  if (value == null) return NaN;
-  const s = String(value).trim();
 
-  // treat placeholders / missing values as NaN
-  if (!s || s === "..." || s.toLowerCase() === "na" || s.toLowerCase() === "n/a") {
-    return NaN;
+  // 2. HELPER: parse numeric with commas, percents, and ellipses -----
+  function toNumber(value) {
+    if (value == null) return NaN;
+    const s = String(value).trim();
+
+    if (!s || s === "..." || s.toLowerCase() === "na" || s.toLowerCase() === "n/a") {
+      return NaN;
+    }
+
+    const cleaned = s.replace(/,/g, "").replace(/%/g, "");
+    const num = +cleaned;
+    return isNaN(num) ? NaN : num;
   }
 
-  // remove commas and percent signs
-  const cleaned = s.replace(/,/g, "").replace(/%/g, "");
+  // 3. SETUP SVG ------------------------------------------------------
+  const svg = d3.select("#chart")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
 
-  const num = +cleaned;
-  return isNaN(num) ? NaN : num;
-}
+  const centerX = width / 2;
+  const centerY = height / 2;
 
+  const g = svg.append("g")
+    .attr("transform", `translate(${centerX},${centerY})`);
 
-    // 3. SETUP SVG ------------------------------------------------------
-    const svg = d3.select("#chart")
-      .append("svg")
-      .attr("width", width)
-      .attr("height", height);
+  const tooltip = d3.select("#tooltip");
 
-    const centerX = width / 2;
-    const centerY = height / 2;
+  // Groups we will reuse on update
+  const gridGroup   = g.append("g").attr("class", "grid");
+  const axisGroup   = g.append("g").attr("class", "axes");
+  const dotsGroup   = g.append("g").attr("class", "dots");
+  const arcGroup    = g.append("g").attr("class", "highlight-arc");
+  const centerGroup = g.append("g").attr("class", "center-label");
 
-    const g = svg.append("g")
-      .attr("transform", `translate(${centerX},${centerY})`);
+  // 4. LOAD DATA ------------------------------------------------------
+  d3.csv("assignment 3 & 4 dataset - assignment 3 and 4(1).csv").then(raw => {
+    // Filter out metadata rows
+    const data = raw.filter(d =>
+      d.indicator &&
+      !["source", "URL", "notes", "data year"].includes(d.indicator)
+    );
 
-  const angleStep = (2 * Math.PI) / metrics.length;
+    // Attach regions and drop those without mapping
+    const withRegion = data
+      .map(d => {
+        const region = regionByCountry[d.indicator];
+        return region ? { ...d, region } : null;
+      })
+      .filter(d => d !== null);
 
+    // Compute region-level averages for each metric
+    const regionMetricMeans = {};
+    regions.forEach(r => { regionMetricMeans[r] = {}; });
 
-    const tooltip = d3.select("#tooltip");
-
-    // 4. LOAD DATA ------------------------------------------------------
-    // Use the exact filename of your CSV here
-    d3.csv("assignment 3 & 4 dataset - assignment 3 and 4(1).csv").then(raw => {
-      // Filter out metadata rows
-      const data = raw.filter(d =>
-        d.indicator &&
-        !["source", "URL", "notes", "data year"].includes(d.indicator)
-      );
-
-      // Attach regions
-      const withRegion = data
-        .map(d => {
-          const region = regionByCountry[d.indicator];
-          return region ? { ...d, region } : null;
-        })
-        .filter(d => d !== null);
-
-      // Compute region-level averages for each metric
-      const regionMetricMeans = {};
-      regions.forEach(r => { regionMetricMeans[r] = {}; });
-
-      metrics.forEach(metric => {
-        regions.forEach(region => {
-          const vals = withRegion
-            .filter(d => d.region === region)
-            .map(d => toNumber(d[metric.col]))
-            .filter(v => !isNaN(v));
-
-          const mean = vals.length ? d3.mean(vals) : NaN;
-          regionMetricMeans[region][metric.id] = mean;
-        });
-      });
-
-      // Build per-metric radial scales (separate scale per spoke)
-      const radialScales = {};
-      metrics.forEach(metric => {
-        const allVals = regions
-          .map(r => regionMetricMeans[r][metric.id])
+    metrics.forEach(metric => {
+      regions.forEach(region => {
+        const vals = withRegion
+          .filter(d => d.region === region)
+          .map(d => toNumber(d[metric.col]))
           .filter(v => !isNaN(v));
 
-        const extent = d3.extent(allVals);
-        // If all values equal, avoid zero span
-        const min = extent[0];
-        const max = extent[1] === extent[0] ? extent[0] + 1 : extent[1];
+        const mean = vals.length ? d3.mean(vals) : NaN;
+        regionMetricMeans[region][metric.id] = mean;
+      });
+    });
 
-        radialScales[metric.id] = d3.scaleLinear()
-          .domain([min, max])
-          .range([innerRadius, outerRadius]);
+    // Build per-metric radial scales (separate scale per spoke)
+    const radialScales = {};
+    metrics.forEach(metric => {
+      const allVals = regions
+        .map(r => regionMetricMeans[r][metric.id])
+        .filter(v => !isNaN(v));
+
+      const extent = d3.extent(allVals);
+      let [min, max] = extent;
+      if (max === min) max = min + 1;
+
+      radialScales[metric.id] = d3.scaleLinear()
+        .domain([min, max])
+        .range([innerRadius, outerRadius]);
+    });
+
+    // For each metric, find which region(s) are strongest
+    const bestRegionsByMetric = {};
+    metrics.forEach(metric => {
+      let maxVal = -Infinity;
+      regions.forEach(region => {
+        const v = regionMetricMeans[region][metric.id];
+        if (!isNaN(v) && v > maxVal) {
+          maxVal = v;
+        }
+      });
+      const best = regions.filter(region => {
+        const v = regionMetricMeans[region][metric.id];
+        return !isNaN(v) && v === maxVal;
+      });
+      bestRegionsByMetric[metric.id] = best;
+    });
+
+    // Draw static grid circles once
+    const gridLevels = 3;
+    for (let i = 1; i <= gridLevels; i++) {
+      const r = innerRadius + (i / gridLevels) * (outerRadius - innerRadius);
+      gridGroup.append("circle")
+        .attr("class", "grid-circle")
+        .attr("r", r);
+    }
+
+    // Dropdown setup
+    const select = d3.select("#region-select");
+    select.selectAll("option")
+      .data(regions)
+      .enter()
+      .append("option")
+      .attr("value", d => d)
+      .property("selected", d => d === "Americas")
+      .text(d => d);
+
+    // Main update function --------------------------------------------
+    function update(selectedRegion) {
+      // 1. Order metrics so the selected region's strongest metrics come first
+      const orderedMetrics = metrics.slice().sort((a, b) => {
+        const aBest = bestRegionsByMetric[a.id]?.includes(selectedRegion) ? -1 : 0;
+        const bBest = bestRegionsByMetric[b.id]?.includes(selectedRegion) ? -1 : 0;
+        if (aBest !== bBest) return aBest - bBest;
+        return 0; // keep original order among ties
       });
 
-      // 5. DRAW GRID & AXES --------------------------------------------
+      // clear previous axes, dots, arc, center label
+      axisGroup.selectAll("*").remove();
+      dotsGroup.selectAll("*").remove();
+      arcGroup.selectAll("*").remove();
+      centerGroup.selectAll("*").remove();
 
-      // A few concentric reference circles just for structure
-      const gridLevels = 3;
-      for (let i = 1; i <= gridLevels; i++) {
-        const r = innerRadius + (i / gridLevels) * (outerRadius - innerRadius);
-        g.append("circle")
-          .attr("class", "grid-circle")
-          .attr("r", r);
-      }
+      const angleStep = (2 * Math.PI) / orderedMetrics.length;
 
-      // Axis lines + labels
-      const axisGroup = g.append("g");
-      metrics.forEach((metric, i) => {
-        const angle =  i * angleStep - Math.PI / 2;
+      // 2. Draw axes + labels
+      orderedMetrics.forEach((metric, i) => {
+        const angle = i * angleStep - Math.PI / 2;
         const xInner = Math.cos(angle) * innerRadius;
         const yInner = Math.sin(angle) * innerRadius;
         const xOuter = Math.cos(angle) * (outerRadius + 12);
@@ -489,40 +487,43 @@
           );
       });
 
-      // 6. DRAW REGION DOTS --------------------------------------------
-      const dotsGroup = g.append("g");
-
+      // 3. Compute dots data (all regions, but only selected is highlighted)
       const dotsData = [];
-        metrics.forEach((metric, i) => {
+      orderedMetrics.forEach((metric, i) => {
         const angle = i * angleStep - Math.PI / 2;
-        regions.forEach(region => {
-            const value = regionMetricMeans[region][metric.id];
-            if (isNaN(value)) return;
-            const r = radialScales[metric.id](value);
-            const x = Math.cos(angle) * r;
-            const y = Math.sin(angle) * r;
+        regions.forEach((region, regionIdx) => {
+          const value = regionMetricMeans[region][metric.id];
+          if (isNaN(value)) return;
+
+          const r = radialScales[metric.id](value);
+          const x = Math.cos(angle) * r;
+          const y = Math.sin(angle) * r;
 
           dotsData.push({
-            metric: metric,
+            metric,
             metricId: metric.id,
             metricLabel: metric.label,
             region,
             value,
             x,
-            y
+            y,
+            angle,
+            regionIdx
           });
         });
       });
 
+      // 4. Draw dots: selected region big & purple, others gray and smaller
       dotsGroup.selectAll("circle")
-        .data(dotsData)
+        .data(dotsData, d => d.metricId + "-" + d.region)
         .enter()
         .append("circle")
         .attr("class", "region-dot")
         .attr("cx", d => d.x)
         .attr("cy", d => d.y)
-        .attr("r", 4.5)
-        .attr("fill", d => regionColor(d.region))
+        .attr("r", d => d.region === selectedRegion ? 7 : 3)
+        .attr("fill", d => d.region === selectedRegion ? highlightColor : "#d1d5db")
+        .attr("opacity", d => d.region === selectedRegion ? 1 : 0.4)
         .on("mousemove", function (event, d) {
           tooltip
             .style("display", "block")
@@ -537,20 +538,91 @@
           tooltip.style("display", "none");
         });
 
-      // 7. LEGEND -------------------------------------------------------
-      const legend = d3.select("#legend");
-      regions.forEach(region => {
-        const item = legend.append("div").attr("class", "legend-item");
-        item.append("div")
-          .attr("class", "legend-swatch")
-          .style("background", regionColor(region));
-        item.append("span").text(region);
+      // 5. Purple arc over the selected region's "strong" metrics
+      const bestIndices = orderedMetrics
+        .map((metric, i) => bestRegionsByMetric[metric.id]?.includes(selectedRegion) ? i : null)
+        .filter(i => i !== null);
+
+      if (bestIndices.length > 0) {
+        const startIdx = d3.min(bestIndices);
+        const endIdx = d3.max(bestIndices);
+
+        const startAngle = startIdx * angleStep - Math.PI / 2;
+        const endAngle   = (endIdx + 1) * angleStep - Math.PI / 2; // cover the wedge
+
+        const arc = d3.arc()
+          .innerRadius(outerRadius + 8)
+          .outerRadius(outerRadius + 18)
+          .startAngle(startAngle)
+          .endAngle(endAngle);
+
+        arcGroup.append("path")
+          .attr("d", arc)
+          .attr("fill", "#ede9fe")
+          .attr("stroke", highlightColor)
+          .attr("stroke-width", 1.5)
+          .attr("opacity", 0.9);
+      }
+
+      // 6. Center summary: % of metrics where this region is strongest
+      let bestCount = 0;
+      metrics.forEach(metric => {
+        if (bestRegionsByMetric[metric.id]?.includes(selectedRegion)) {
+          bestCount++;
+        }
       });
 
-    }).catch(err => {
-      console.error(err);
-      alert("Error loading CSV – check the filename/path.");
+      const pct = Math.round((bestCount / metrics.length) * 100);
+
+      centerGroup.append("text")
+        .attr("text-anchor", "middle")
+        .attr("y", -8)
+        .style("font-size", "16px")
+        .style("font-weight", "600")
+        .style("fill", "#111827")
+        .text(selectedRegion);
+
+      centerGroup.append("text")
+        .attr("text-anchor", "middle")
+        .attr("y", 12)
+        .style("font-size", "13px")
+        .style("fill", "#4b5563")
+        .text(`Stronger on ${bestCount} of ${metrics.length} metrics`);
+
+      centerGroup.append("text")
+        .attr("text-anchor", "middle")
+        .attr("y", 30)
+        .style("font-size", "12px")
+        .style("fill", highlightColor)
+        .text(`${pct}% of metrics`);
+    }
+
+    // Initial render with Americas selected
+    const initialRegion = "Americas";
+    update(initialRegion);
+
+    // Dropdown listener
+    select.on("change", (event) => {
+      const region = event.target.value;
+      update(region);
     });
-  </script>
+
+    // Legend (optional): just text list of regions
+    const legend = d3.select("#legend");
+    legend.selectAll("*").remove();
+    regions.forEach(region => {
+      const item = legend.append("div").attr("class", "legend-item");
+      item.append("div")
+        .attr("class", "legend-swatch")
+        .style("background", "#d1d5db");
+      item.append("span").text(region);
+    });
+
+  }).catch(err => {
+    console.error(err);
+    alert("Error loading CSV – check the filename/path.");
+  });
+</script>
+
 </body>
 </html>
